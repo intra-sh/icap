@@ -14,8 +14,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/textproto"
-	"net/url"
 	"runtime/debug"
 	"time"
 )
@@ -64,8 +62,9 @@ func newConn(rwc net.Conn, handler Handler) (c *conn, err error) {
 // Read next request from connection.
 func (c *conn) readRequest() (w *respWriter, err error) {
 	var req *Request
-	req, err = ReadRequest(c.buf)
-	// Simply pass the error along, don't have an empty branch
+	if req, err = ReadRequest(c.buf); err != nil {
+		return nil, err
+	}
 
 	if req == nil {
 		req = new(Request)
@@ -95,48 +94,38 @@ func (c *conn) close() {
 // Serve a new connection.
 func (c *conn) serve(debugLevel int) {
 	defer func() {
+
 		err := recover()
 		if err == nil {
 			return
 		}
-		c.rwc.Close()
 
 		var buf bytes.Buffer
 		fmt.Fprintf(&buf, "icap: panic serving %v: %v\n", c.remoteAddr, err)
 		buf.Write(debug.Stack())
 		log.Print(buf.String())
+
 	}()
-	var w *respWriter
-	w, err := c.readRequest()
-	// In a case of parsing error there should be an option to handle a dummy request to not fail the whole service.
-
-	if err != nil {
-		if debugLevel > 0 {
-			log.Println("error while reading request:", err)
-			log.Println("error while reading request:", w)
-			log.Println("error while reading request:", w.conn)
-			log.Println("error while reading request:", w.req)
-			log.Println("error while reading request:", w.header)
-		}
-		//		c.rwc.Close()
-		//		return
+	for {
+		var w *respWriter
+		w, err := c.readRequest()
+		// In a case of parsing error there should be an option to handle a dummy request to not fail the whole service.
 		if w == nil {
-			w = new(respWriter)
-		}
-		w.conn = c
-		w.req = new(Request)
-		w.req.Method = "ERRDUMMY"
-		w.req.RawURL = "/"
-		w.req.Proto = "ICAP/1.0"
-		w.req.URL, _ = url.ParseRequestURI("icap://localhost/")
-		w.req.Header = textproto.MIMEHeader{
-			"Connection": {"close"},
-			// "Error:":     {err.Error()},
-		}
-	}
+			c.rwc.Close()
 
-	c.handler.ServeICAP(w, w.req)
-	w.finishRequest()
+			break
+		}
+		if err != nil {
+
+			log.Println("error while reading request:", err)
+			c.rwc.Close()
+			break
+
+		}
+
+		c.handler.ServeICAP(w, w.req)
+		w.finishRequest()
+	}
 
 	c.close()
 }
@@ -238,6 +227,12 @@ func Serve(l net.Listener, handler Handler) error {
 // on incoming connections.
 func ListenAndServe(addr string, handler Handler) error {
 	server := &Server{Addr: addr, Handler: handler}
+	return server.ListenAndServe()
+}
+
+func ListenAndServeDebug(addr string, handler Handler) error {
+	server := &Server{Addr: addr, Handler: handler}
+	server.DebugLevel = 1
 	return server.ListenAndServe()
 }
 
