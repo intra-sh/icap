@@ -54,7 +54,7 @@ func TestREQMOD2(t *testing.T) {
 
 	conn, err := net.Dial("tcp", serverAddr)
 	if err != nil {
-		t.Fatalf("could not connect to ICAP server on localhost")
+		t.Fatalf("could not connect to ICAP server on localhost: %s", err)
 	}
 
 	io.WriteString(conn, request)
