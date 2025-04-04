@@ -67,7 +67,9 @@ func (w *respWriter) Write(p []byte) (n int, err error) {
 
 func (w *respWriter) WriteRaw(p string) {
 	bw := w.conn.buf.Writer
-	io.WriteString(bw, p)
+	if _, err := io.WriteString(bw, p); err != nil {
+		log.Printf("Error writing to buffer: %v", err)
+	}
 	w.wroteRaw = true
 }
 
@@ -132,11 +134,17 @@ func (w *respWriter) WriteHeader(code int, httpMessage interface{}, hasBody bool
 		status = fmt.Sprintf("status code %d", code)
 	}
 	fmt.Fprintf(bw, "ICAP/1.0 %d %s\r\n", code, status)
-	w.header.Write(bw)
-	io.WriteString(bw, "\r\n")
+	if err := w.header.Write(bw); err != nil {
+		log.Printf("Error writing header: %v", err)
+	}
+	if _, err := io.WriteString(bw, "\r\n"); err != nil {
+		log.Printf("Error writing to buffer: %v", err)
+	}
 
 	if header != nil {
-		bw.Write(header)
+		if _, err := bw.Write(header); err != nil {
+			log.Printf("Error writing header: %v", err)
+		}
 	}
 
 	w.wroteHeader = true
@@ -154,7 +162,9 @@ func (w *respWriter) finishRequest() {
 	if w.cw != nil && !w.wroteRaw {
 		w.cw.Close()
 		w.cw = nil
-		io.WriteString(w.conn.buf, "\r\n")
+		if _, err := io.WriteString(w.conn.buf, "\r\n"); err != nil {
+			log.Printf("Error writing to buffer: %v", err)
+		}
 	}
 
 	w.conn.buf.Flush()
@@ -180,11 +190,15 @@ func httpRequestHeader(req *http.Request) (hdr []byte, err error) {
 	uri := req.URL.String()
 
 	fmt.Fprintf(buf, "%s %s %s\r\n", valueOrDefault(req.Method, "GET"), uri, valueOrDefault(req.Proto, "HTTP/1.1"))
-	req.Header.WriteSubset(buf, map[string]bool{
+	if err := req.Header.WriteSubset(buf, map[string]bool{
 		"Transfer-Encoding": true,
 		"Content-Length":    true,
-	})
-	io.WriteString(buf, "\r\n")
+	}); err != nil {
+		return nil, fmt.Errorf("failed to write header: %v", err)
+	}
+	if _, err := io.WriteString(buf, "\r\n"); err != nil {
+		return nil, fmt.Errorf("failed to write string: %v", err)
+	}
 
 	return buf.Bytes(), nil
 }
@@ -208,14 +222,20 @@ func httpResponseHeader(resp *http.Response) (hdr []byte, err error) {
 	}
 	fmt.Fprintf(buf, "%s %d %s\r\n", proto, resp.StatusCode, text)
 	if _, xIcap206Exists := resp.Header["X-Icap-206"]; xIcap206Exists {
-		resp.Header.Write(buf)
+		if err := resp.Header.Write(buf); err != nil {
+			return nil, fmt.Errorf("failed to write header: %v", err)
+		}
 	} else {
-		resp.Header.WriteSubset(buf, map[string]bool{
+		if err := resp.Header.WriteSubset(buf, map[string]bool{
 			"Transfer-Encoding": true,
 			"Content-Length":    false,
-		})
+		}); err != nil {
+			return nil, fmt.Errorf("failed to write subset header: %v", err)
+		}
 	}
-	io.WriteString(buf, "\r\n")
+	if _, err := io.WriteString(buf, "\r\n"); err != nil {
+		return nil, fmt.Errorf("failed to write string: %v", err)
+	}
 
 	return buf.Bytes(), nil
 }

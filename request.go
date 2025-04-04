@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -150,7 +149,7 @@ func ReadRequest(b *bufio.ReadWriter) (req *Request, err error) {
 				moreBody = true
 			}
 
-			req.Preview, err = ioutil.ReadAll(newChunkedReader(b))
+			req.Preview, err = io.ReadAll(newChunkedReader(b))
 			if err != nil {
 				if strings.Contains(err.Error(), "ieof") {
 					// The data ended with "0; ieof", which the HTTP chunked reader doesn't understand.
@@ -164,9 +163,9 @@ func ReadRequest(b *bufio.ReadWriter) (req *Request, err error) {
 			if moreBody {
 				r = io.MultiReader(r, &continueReader{buf: b})
 			}
-			bodyReader = ioutil.NopCloser(r)
+			bodyReader = io.NopCloser(r)
 		} else {
-			bodyReader = ioutil.NopCloser(newChunkedReader(b))
+			bodyReader = io.NopCloser(newChunkedReader(b))
 		}
 	}
 
@@ -175,9 +174,9 @@ func ReadRequest(b *bufio.ReadWriter) (req *Request, err error) {
 		invalidURLEscapeFixed := false
 		req.Request, err = http.ReadRequest(bufio.NewReader(bytes.NewBuffer(rawReqHdr)))
 		if err != nil && strings.Contains(err.Error(), "invalid URL escape") {
-			//Fix the request url
+			// Fix the request url
 			// Convert the rawReqHdr to string
-			// find the url\path start and end(sould be in the status line
+			// find the url\path start and end(should be in the status line
 			// convert the percents into %25
 			// Then reparse the whole request
 			rawReqHdrStr := string(rawReqHdr)

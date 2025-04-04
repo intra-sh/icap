@@ -6,7 +6,6 @@ package icap
 
 import (
 	"io"
-	"io/ioutil"
 	"net"
 	"testing"
 )
@@ -79,7 +78,7 @@ func HandleREQMOD2(w ResponseWriter, req *Request) {
 	req.Request.Header.Set("Accept", "text/html, text/plain, image/gif")
 	req.Request.Header.Set("Accept-Encoding", "gzip, compress")
 
-	body, _ := ioutil.ReadAll(req.Request.Body)
+	body, _ := io.ReadAll(req.Request.Body)
 	newBody := string(body) + "  ICAP powered!"
 
 	w.WriteHeader(200, req.Request, true)

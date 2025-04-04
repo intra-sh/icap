@@ -64,10 +64,9 @@ func newConn(rwc net.Conn, handler Handler) (c *conn, err error) {
 // Read next request from connection.
 func (c *conn) readRequest() (w *respWriter, err error) {
 	var req *Request
-	if req, err = ReadRequest(c.buf); err != nil {
-		//return req, err
+	req, err = ReadRequest(c.buf)
+	// Simply pass the error along, don't have an empty branch
 
-	}
 	if req == nil {
 		req = new(Request)
 	} else {
@@ -168,7 +167,6 @@ func (srv *Server) ListenAndServe() error {
 
 // ListenAndServeTLS ---
 func (srv *Server) ListenAndServeTLS(cert, key string) error {
-
 	cer, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		return err
@@ -177,7 +175,6 @@ func (srv *Server) ListenAndServeTLS(cert, key string) error {
 	if addr == "" {
 		addr = ":1344"
 	}
-
 	config := &tls.Config{Certificates: []tls.Certificate{cer}}
 	l, err := tls.Listen("tcp", addr, config)
 	if err != nil {
@@ -199,17 +196,26 @@ func (srv *Server) Serve(l net.Listener) error {
 	for {
 		rw, err := l.Accept()
 		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				log.Printf("icap: Accept error: %v", err)
+			// Instead of using the deprecated ne.Temporary(), check for specific error types
+			// or just log and continue for non-critical errors
+			log.Printf("icap: Accept error: %v", err)
+			// If this is a temporary error, retry
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Retry after a small delay
+				time.Sleep(5 * time.Millisecond)
 				continue
 			}
 			return err
 		}
 		if srv.ReadTimeout != 0 {
-			rw.SetReadDeadline(time.Now().Add(srv.ReadTimeout))
+			if err := rw.SetReadDeadline(time.Now().Add(srv.ReadTimeout)); err != nil {
+				log.Printf("icap: SetReadDeadline error: %v", err)
+			}
 		}
 		if srv.WriteTimeout != 0 {
-			rw.SetWriteDeadline(time.Now().Add(srv.WriteTimeout))
+			if err := rw.SetWriteDeadline(time.Now().Add(srv.WriteTimeout)); err != nil {
+				log.Printf("icap: SetWriteDeadline error: %v", err)
+			}
 		}
 		c, err := newConn(rw, handler)
 		if err != nil {
@@ -217,8 +223,6 @@ func (srv *Server) Serve(l net.Listener) error {
 		}
 		go c.serve(srv.DebugLevel)
 	}
-	// The next line is only there to see one specific edge case whichc should never happen.
-	panic("Shuold never be reached")
 }
 
 // Serve accepts incoming ICAP connections on the listener l,
