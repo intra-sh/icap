@@ -18,9 +18,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/elico/icap"
 	"net/http"
 	"os"
+
+	"github.com/intra-sh/icap" // Updated import path to match the current module
 )
 
 var ISTag = "\"GOLANG\""

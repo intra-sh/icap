@@ -133,7 +133,7 @@ func NotFound(w ResponseWriter, r *Request) {
 }
 
 // NotFoundHandler returns a simple request handler
-// that replies to each request with a ``404 page not found'' reply.
+// that replies to each request with a “404 page not found” reply.
 func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 
 // Redirect to a fixed URL
