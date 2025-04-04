@@ -1,0 +1,21 @@
+{
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--fast"
+    ],
+    "go.formatTool": "goimports",
+    "editor.formatOnSave": true,
+    "go.useLanguageServer": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": true
+    },
+    "[go]": {
+        "editor.insertSpaces": false,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "go.buildOnSave": "workspace",
+    "go.vetOnSave": "workspace"
+}
