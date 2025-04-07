@@ -94,7 +94,6 @@ func (c *conn) close() {
 // Serve a new connection.
 func (c *conn) serve(debugLevel int) {
 	defer func() {
-
 		err := recover()
 		if err == nil {
 			return
@@ -104,7 +103,6 @@ func (c *conn) serve(debugLevel int) {
 		fmt.Fprintf(&buf, "icap: panic serving %v: %v\n", c.remoteAddr, err)
 		buf.Write(debug.Stack())
 		log.Print(buf.String())
-
 	}()
 	for {
 		var w *respWriter
@@ -116,11 +114,9 @@ func (c *conn) serve(debugLevel int) {
 			break
 		}
 		if err != nil {
-
 			log.Println("error while reading request:", err)
 			c.rwc.Close()
 			break
-
 		}
 
 		c.handler.ServeICAP(w, w.req)
