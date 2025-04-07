@@ -127,6 +127,11 @@ func (w *respWriter) WriteHeader(code int, httpMessage interface{}, hasBody bool
 	}
 
 	w.header.Set("Connection", "close")
+	if w.req.Method == "REQMOD" && w.req.Header.Get("X-Original-Url") != "" {
+		w.header.Set("X-Original-Url", w.req.Header.Get("X-Original-Url"))
+	} else if w.req.Method == "RESPMOD" && w.req.Header.Get("X-Icap-Request-Url") != "" {
+		w.header.Set("X-Icap-Request-Url", w.req.Header.Get("X-Icap-Request-Url"))
+	}
 
 	bw := w.conn.buf.Writer
 	status := StatusText(code)

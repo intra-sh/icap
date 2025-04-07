@@ -31,6 +31,7 @@ func TestRequestModification(t *testing.T) {
 	// Build the complete ICAP request with computed Encapsulated value
 	request := fmt.Sprintf("REQMOD icap://icap-server.net/modify ICAP/1.0\r\n"+
 		"Host: icap-server.net\r\n"+
+		"X-Original-URL: https://www.example.com/example.html\r\n"+
 		"Encapsulated: req-hdr=0, req-body=%d\r\n"+
 		"\r\n"+
 		"%s"+

@@ -219,6 +219,21 @@ func ReadRequest(b *bufio.ReadWriter) (req *Request, err error) {
 		}
 	}
 
+	// Fix the URL in the request and response if source supports it.
+	if req.Method == "REQMOD" {
+		alternateURL := req.Header.Get("X-Original-Url")
+		parsedAltURL, err := url.ParseRequestURI(alternateURL)
+		if err == nil && parsedAltURL != nil {
+			req.Request.URL = parsedAltURL
+		}
+	} else if req.Method == "RESPMOD" {
+		alternateURL := req.Header.Get("X-Icap-Request-Url")
+		parsedAltURL, err := url.ParseRequestURI(alternateURL)
+		if err == nil && parsedAltURL != nil {
+			req.Response.Request.URL = parsedAltURL
+		}
+	}
+
 	return
 }
 

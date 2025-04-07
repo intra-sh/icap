@@ -5,9 +5,14 @@
 package icap
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
+	"time"
 )
 
 const serverAddr = "localhost:11344"
@@ -83,4 +88,109 @@ func HandleREQMOD2(w ResponseWriter, req *Request) {
 
 	w.WriteHeader(200, req.Request, true)
 	io.WriteString(w, newBody)
+}
+
+// Test case for modifying an ICAP response by adding headers
+func TestResponseModification(t *testing.T) {
+	// Define the HTTP response headers and body separately
+	httpBody := "This is a test response body."
+	httpHeaders := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
+		"Content-Type: text/plain\r\n"+
+		"Content-Length: %d\r\n"+
+		"\r\n", len(httpBody))
+
+	// Calculate the length of HTTP headers for the Encapsulated header
+	httpHeadersLen := len(httpHeaders)
+
+	xReqUrl := "https://www.example.com/example.html"
+
+	// Build the complete ICAP request with computed Encapsulated value
+	request := fmt.Sprintf("RESPMOD icap://icap-server.net/modify ICAP/1.0\r\n"+
+		"Host: icap-server.net\r\n"+
+		"X-ICAP-Request-URL: %s\r\n"+
+		"Encapsulated: res-hdr=0, res-body=%d\r\n"+
+		"\r\n"+
+		"%s"+
+		"%x\r\n"+
+		"%s\r\n"+
+		"0\r\n"+
+		"\r\n", xReqUrl, httpHeadersLen, httpHeaders, len(httpBody), httpBody)
+
+	// Register a new handler for response modification
+	HandleFunc("/modify", handleResponseModification)
+	go ListenAndServeDebug(reqTestServerAddr, nil)
+
+	// Give the server a moment to get ready
+	time.Sleep(100 * time.Millisecond)
+
+	conn, err := net.Dial("tcp", reqTestServerAddr)
+	if err != nil {
+		t.Fatalf("could not connect to ICAP server: %s", err)
+	}
+	defer conn.Close()
+
+	io.WriteString(conn, request)
+
+	// Set a deadline to prevent the test from hanging
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	// Read the full response
+	reader := bufio.NewReader(conn)
+	respBuffer := make([]byte, 1024) // Use a larger buffer size
+	n, err := reader.Read(respBuffer)
+	if err != nil {
+		t.Fatalf("error while reading response: %v", err)
+	}
+
+	fullResponse := string(respBuffer[:n])
+
+	// Verify the response contains expected data
+	if !strings.Contains(fullResponse, "ICAP/1.0 200 OK") {
+		t.Errorf("Response doesn't contain expected status code:\n%s", fullResponse)
+	}
+
+	if !strings.Contains(fullResponse, "X-Icap-Modified: true") {
+		t.Errorf("Response doesn't contain X-ICAP-Modified header:\n%s", fullResponse)
+	}
+
+	if !strings.Contains(fullResponse, "This is a successful modification response body") {
+		t.Errorf("Response doesn't contain modified body:\n%s", fullResponse)
+	}
+	if !strings.Contains(fullResponse, xReqUrl) {
+		t.Errorf("Response doesn't contain x-icap-request-url [%s]:\n%s", xReqUrl, fullResponse)
+	}
+}
+
+func handleResponseModification(w ResponseWriter, req *Request) {
+	w.Header().Set("Date", "Mon, 10 Jan 2000 09:55:21 GMT")
+	w.Header().Set("Server", "ICAP-Test-Server/1.0")
+
+	// Add custom headers to the response
+	req.Response.Header.Set("X-ICAP-Modified", "true")
+	req.Response.Header.Set("Via", "1.0 icap-server.net (ICAP Test Server)")
+
+	originalBody := make([]byte, req.Response.ContentLength)
+	_, err := req.Response.Body.Read(originalBody)
+	if err != nil {
+		// Handle error
+		w.WriteHeader(500, nil, false)
+		return
+	}
+
+	// Example: modify body content
+	modifiedBody := bytes.Replace(
+		originalBody,
+		[]byte("test"),
+		[]byte("successful modification"),
+		-1,
+	)
+
+	// Update content length if it exists
+	if req.Response.ContentLength > 0 {
+		req.Response.ContentLength = int64(len(modifiedBody))
+	}
+
+	// Return the modified response
+	w.WriteHeader(200, req.Response, true)
+	w.Write(modifiedBody)
 }
