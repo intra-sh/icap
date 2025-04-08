@@ -14,6 +14,9 @@ func SimulateRequestHandling(icapMethod string, inputHttpHeaders []string, httpB
 	// Define the HTTP request headers and body separately
 	request := ""
 	switch icapMethod {
+
+	//TODO: implement 0 length body handling + "Transfer-Encoding: chunked"
+
 	case "OPTIONS":
 		return "", nil
 	case "REQMOD":
