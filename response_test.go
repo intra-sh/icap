@@ -5,35 +5,27 @@
 package icap
 
 import (
-	"bufio"
 	"bytes"
-	"fmt"
 	"io"
-	"net"
 	"strings"
 	"testing"
-	"time"
 )
 
 const serverAddr = "localhost:11344"
 
 // REQMOD example 2 from RFC 3507, adjusted for order of headers, etc.
-func TestREQMOD2(t *testing.T) {
-	request :=
-		"REQMOD icap://icap-server.net/server?arg=87 ICAP/1.0\r\n" +
-			"Host: icap-server.net\r\n" +
-			"Encapsulated: req-hdr=0, req-body=154\r\n" +
-			"\r\n" +
-			"POST /origin-resource/form.pl HTTP/1.1\r\n" +
-			"Host: www.origin-server.com\r\n" +
-			"Accept: text/html, text/plain\r\n" +
-			"Accept-Encoding: compress\r\n" +
-			"Cache-Control: no-cache\r\n" +
-			"\r\n" +
-			"1e\r\n" +
-			"I am posting this information.\r\n" +
-			"0\r\n" +
-			"\r\n"
+func TestRequestModification1(t *testing.T) {
+	response, err := SimulateRequestHandling("REQMOD",
+		[]string{
+			"POST /origin-resource/form.pl HTTP/1.1",
+			"Host: www.origin-server.com",
+			"Accept: text/html, text/plain",
+			"Accept-Encoding: compress",
+			"Cache-Control: no-cache",
+		},
+		"I am posting this information.",
+		"",
+		handleResponseModification1)
 	resp :=
 		"ICAP/1.0 200 OK\r\n" +
 			"Connection: close\r\n" +
@@ -53,28 +45,13 @@ func TestREQMOD2(t *testing.T) {
 			"I am posting this information.  ICAP powered!\r\n" +
 			"0\r\n" +
 			"\r\n"
-
-	HandleFunc("/server", HandleREQMOD2)
-	go ListenAndServe(serverAddr, nil)
-
-	conn, err := net.Dial("tcp", serverAddr)
 	if err != nil {
-		t.Fatalf("could not connect to ICAP server on localhost: %s", err)
+		t.Errorf("Response handling has errors:\n%s", err)
 	}
-
-	io.WriteString(conn, request)
-	respBuffer := make([]byte, len(resp))
-	_, err = io.ReadFull(conn, respBuffer)
-
-	if err != nil {
-		t.Fatalf("error while reading response: %v", err)
-	}
-
-	response := string(respBuffer)
 	checkString("Response", response, resp, t)
 }
 
-func HandleREQMOD2(w ResponseWriter, req *Request) {
+func handleResponseModification1(w ResponseWriter, req *Request) {
 	w.Header().Set("Date", "Mon, 10 Jan 2000  09:55:21 GMT")
 	w.Header().Set("Server", "ICAP-Server-Software/1.0")
 	w.Header().Set("ISTag", "\"W3E4R7U9-L2E4-2\"")
@@ -91,58 +68,19 @@ func HandleREQMOD2(w ResponseWriter, req *Request) {
 }
 
 // Test case for modifying an ICAP response by adding headers
-func TestResponseModification(t *testing.T) {
-	// Define the HTTP response headers and body separately
-	httpBody := "This is a test response body."
-	httpHeaders := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
-		"Content-Type: text/plain\r\n"+
-		"Content-Length: %d\r\n"+
-		"\r\n", len(httpBody))
-
-	// Calculate the length of HTTP headers for the Encapsulated header
-	httpHeadersLen := len(httpHeaders)
-
+func TestResponseModification2(t *testing.T) {
 	xReqUrl := "https://www.example.com/example.html"
-
-	// Build the complete ICAP request with computed Encapsulated value
-	request := fmt.Sprintf("RESPMOD icap://icap-server.net/modify ICAP/1.0\r\n"+
-		"Host: icap-server.net\r\n"+
-		"X-ICAP-Request-URL: %s\r\n"+
-		"Encapsulated: res-hdr=0, res-body=%d\r\n"+
-		"\r\n"+
-		"%s"+
-		"%x\r\n"+
-		"%s\r\n"+
-		"0\r\n"+
-		"\r\n", xReqUrl, httpHeadersLen, httpHeaders, len(httpBody), httpBody)
-
-	// Register a new handler for response modification
-	HandleFunc("/modify", handleResponseModification)
-	go ListenAndServeDebug(reqTestServerAddr, nil)
-
-	// Give the server a moment to get ready
-	time.Sleep(100 * time.Millisecond)
-
-	conn, err := net.Dial("tcp", reqTestServerAddr)
+	fullResponse, err := SimulateRequestHandling("RESPMOD",
+		[]string{
+			"HTTP/1.1 200 OK",
+			"Content-Type: text/plain",
+		},
+		"This is a test response body.",
+		xReqUrl,
+		handleResponseModification2)
 	if err != nil {
-		t.Fatalf("could not connect to ICAP server: %s", err)
+		t.Errorf("Response handling has errors:\n%s", err)
 	}
-	defer conn.Close()
-
-	io.WriteString(conn, request)
-
-	// Set a deadline to prevent the test from hanging
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-	// Read the full response
-	reader := bufio.NewReader(conn)
-	respBuffer := make([]byte, 1024) // Use a larger buffer size
-	n, err := reader.Read(respBuffer)
-	if err != nil {
-		t.Fatalf("error while reading response: %v", err)
-	}
-
-	fullResponse := string(respBuffer[:n])
 
 	// Verify the response contains expected data
 	if !strings.Contains(fullResponse, "ICAP/1.0 200 OK") {
@@ -161,7 +99,7 @@ func TestResponseModification(t *testing.T) {
 	}
 }
 
-func handleResponseModification(w ResponseWriter, req *Request) {
+func handleResponseModification2(w ResponseWriter, req *Request) {
 	w.Header().Set("Date", "Mon, 10 Jan 2000 09:55:21 GMT")
 	w.Header().Set("Server", "ICAP-Test-Server/1.0")
 
